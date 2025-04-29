@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AJAX Demo with Visual Debugger</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .container {
+        display: flex;
+        gap: 20px;
+      }
+
+      .panel {
+        flex: 1;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 15px;
+      }
+
+      .debug-panel {
+        background-color: #f8f8f8;
+        height: 400px;
+        overflow-y: auto;
+      }
+
+      .log-entry {
+        margin-bottom: 10px;
+        padding: 8px;
+        border-radius: 4px;
+      }
+
+      .log-info {
+        background-color: #e8f4fd;
+        border-left: 4px solid #2196f3;
+      }
+
+      .log-success {
+        background-color: #e8f8e8;
+        border-left: 4px solid #4caf50;
+      }
+
+      .log-error {
+        background-color: #fde8e8;
+        border-left: 4px solid #f44336;
+      }
+
+      .log-warning {
+        background-color: #fff8e8;
+        border-left: 4px solid #ffc107;
+      }
+
+      .timestamp {
+        color: #888;
+        font-size: 0.8em;
+      }
+
+      button {
+        padding: 8px 12px;
+        margin: 5px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+
+      input,
+      select {
+        padding: 8px;
+        margin: 5px 0;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .control-group {
+        margin-bottom: 15px;
+      }
+
+      .response-container {
+        background-color: #f5f5f5;
+        padding: 10px;
+        border-radius: 4px;
+        margin-top: 10px;
+        white-space: pre-wrap;
+      }
+
+      h2 {
+        margin-top: 0;
+        color: #333;
+      }
+
+      .clear-btn {
+        background-color: #f44336;
+      }
+
+      .clear-btn:hover {
+        background-color: #d32f2f;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AJAX Demo with Visual Debugger</h1>
+
+    <div class="container">
+      <div class="panel">
+        <h2>AJAX Controls</h2>
+
+        <div class="control-group">
+          <label for="request-type">Request Type:</label>
+          <select id="request-type">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="url">URL:</label>
+          <input
+            type="text"
+            id="url"
+            value="https://jsonplaceholder.typicode.com/posts/1"
+          />
+        </div>
+
+        <div class="control-group">
+          <label for="request-body">Request Body (for POST/PUT):</label>
+          <textarea id="request-body" rows="5" style="width: 100%">
+{
+    "title": "foo",
+    "body": "bar",
+    "userId": 1
+}</textarea
+          >
+        </div>
+
+        <div class="control-group">
+          <button id="send-request">Send Request</button>
+          <button id="send-async">Send Async Request</button>
+          <button id="simulate-error">Simulate Error</button>
+        </div>
+
+        <div class="control-group">
+          <h3>Response:</h3>
+          <div id="response" class="response-container">No response yet</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Visual Debugger</h2>
+        <button id="clear-logs" class="clear-btn">Clear Logs</button>
+        <div id="debug-panel" class="debug-panel"></div>
+      </div>
+    </div>
+
+    <script>
+      // Debugger functionality
+      const debugPanel = document.getElementById("debug-panel");
+
+      function log(message, type = "info") {
+        const logEntry = document.createElement("div");
+        logEntry.className = `log-entry log-${type}`;
+
+        const timestamp = new Date().toLocaleTimeString();
+
+        logEntry.innerHTML = `
+                <div class="timestamp">${timestamp}</div>
+                <div class="log-message">${message}</div>
+            `;
+
+        debugPanel.appendChild(logEntry);
+        debugPanel.scrollTop = debugPanel.scrollHeight;
+      }
+
+      // Clear logs
+      document
+        .getElementById("clear-logs")
+        .addEventListener("click", function () {
+          debugPanel.innerHTML = "";
+          log("Logs cleared", "info");
+        });
+
+      // AJAX functionality
+      function makeRequest(async = true) {
+        const requestType = document.getElementById("request-type").value;
+        const url = document.getElementById("url").value;
+        const requestBody = document.getElementById("request-body").value;
+        const responseContainer = document.getElementById("response");
+
+        log(`Preparing ${requestType} request to ${url}`, "info");
+
+        // Create XHR object
+        const xhr = new XMLHttpRequest();
+
+        // Configure request
+        xhr.open(requestType, url, async);
+
+        // Set headers
+        xhr.setRequestHeader("Content-Type", "application/json");
+        log("Set header: Content-Type: application/json", "info");
+
+        // Setup event listeners
+        xhr.onreadystatechange = function () {
+          log(`Ready state changed: ${xhr.readyState}`, "info");
+
+          if (xhr.readyState === 1) {
+            log("Request opened", "info");
+          } else if (xhr.readyState === 2) {
+            log("Headers received", "info");
+          } else if (xhr.readyState === 3) {
+            log("Loading response...", "info");
+          } else if (xhr.readyState === 4) {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              log(
+                `Request completed successfully with status: ${xhr.status}`,
+                "success"
+              );
+              try {
+                const response = JSON.parse(xhr.responseText);
+                responseContainer.textContent = JSON.stringify(
+                  response,
+                  null,
+                  2
+                );
+                log("Response parsed as JSON successfully", "success");
+              } catch (e) {
+                responseContainer.textContent = xhr.responseText;
+                log(
+                  "Response is not valid JSON, displaying as text",
+                  "warning"
+                );
+              }
+            } else {
+              log(`Request failed with status: ${xhr.status}`, "error");
+              responseContainer.textContent =
+                xhr.responseText || "No response received";
+            }
+          }
+        };
+
+        xhr.onerror = function () {
+          log("Network error occurred", "error");
+          responseContainer.textContent = "Network error occurred";
+        };
+
+        xhr.ontimeout = function () {
+          log("Request timed out", "error");
+          responseContainer.textContent = "Request timed out";
+        };
+
+        // Send request
+        try {
+          if (requestType === "GET" || requestType === "DELETE") {
+            log("Sending request without body", "info");
+            xhr.send();
+          } else {
+            log(`Sending request with body: ${requestBody}`, "info");
+            xhr.send(requestBody);
+          }
+        } catch (e) {
+          log(`Error sending request: ${e.message}`, "error");
+          responseContainer.textContent = `Error: ${e.message}`;
+        }
+      }
+
+      // Event listeners for buttons
+      document
+        .getElementById("send-request")
+        .addEventListener("click", function () {
+          makeRequest(true);
+        });
+
+      document
+        .getElementById("send-async")
+        .addEventListener("click", function () {
+          log("Starting multiple async requests...", "info");
+
+          // Make 3 async requests to demonstrate asynchronous behavior
+          for (let i = 1; i <= 3; i++) {
+            setTimeout(() => {
+              document.getElementById(
+                "url"
+              ).value = `https://jsonplaceholder.typicode.com/posts/${i}`;
+              makeRequest(true);
+            }, i * 500);
+          }
+        });
+
+      document
+        .getElementById("simulate-error")
+        .addEventListener("click", function () {
+          document.getElementById("url").value =
+            "https://non-existent-domain-123456.com";
+          makeRequest(true);
+        });
+
+      // Initial log
+      log("AJAX Debugger initialized", "info");
+      log("Ready to send requests", "info");
+    </script>
+  </body>
+</html>

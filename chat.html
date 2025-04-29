@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JSONPlaceholder Chat Demo</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      #chat-container {
+        border: 1px solid #ccc;
+        height: 400px;
+        overflow-y: auto;
+        padding: 10px;
+        margin-bottom: 10px;
+        background-color: #f9f9f9;
+      }
+      #message-form {
+        display: flex;
+      }
+      #message-input {
+        flex-grow: 1;
+        padding: 8px;
+        margin-right: 10px;
+      }
+      .message {
+        margin-bottom: 10px;
+        padding: 8px;
+        border-radius: 5px;
+      }
+      .user-message {
+        background-color: #dcf8c6;
+        align-self: flex-end;
+        text-align: right;
+      }
+      .other-message {
+        background-color: #ebebeb;
+      }
+      .message-info {
+        font-size: 0.8em;
+        color: #666;
+        margin-bottom: 3px;
+      }
+      .loading {
+        text-align: center;
+        color: #666;
+        font-style: italic;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 0.9em;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SHORT POLLING CHAT</h1>
+
+    <div id="chat-container">
+      <div class="loading">Connecting to chat server...</div>
+    </div>
+
+    <form id="message-form">
+      <input
+        type="text"
+        id="message-input"
+        placeholder="Type your message..."
+        required
+      />
+      <button type="submit">Send</button>
+    </form>
+
+    <div class="status">
+      Status: <span id="connection-status">Initializing...</span>
+    </div>
+
+    <script>
+      // Store the username (in a real app, this would come from authentication)
+      const username = "User" + Math.floor(Math.random() * 1000);
+
+      // Track the current message ID we're fetching
+      let currentMessageId = 1;
+
+      // Track if polling is active
+      let isPollingActive = true;
+
+      // Track displayed message IDs to avoid duplicates
+      const displayedMessageIds = new Set();
+
+      // Function to add a message to the chat container
+      function addMessageToChat(post, isUserMessage = false) {
+        const chatContainer = document.getElementById("chat-container");
+
+        // Remove loading message if it exists
+        const loadingElement = document.querySelector(".loading");
+        if (loadingElement) {
+          loadingElement.remove();
+        }
+
+        // Skip if we've already displayed this message
+        if (!isUserMessage && displayedMessageIds.has(post.id)) {
+          return;
+        }
+
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${
+          isUserMessage ? "user-message" : "other-message"
+        }`;
+
+        // Create message content
+        const messageInfo = document.createElement("div");
+        messageInfo.className = "message-info";
+
+        // Use the post userId as the "user" - in a real app this would be a username
+        const sender = isUserMessage
+          ? username
+          : `User${post.userId || Math.floor(Math.random() * 10) + 1}`;
+        const postId = isUserMessage ? "New" : post.id;
+        const timestamp = new Date().toLocaleTimeString();
+        messageInfo.textContent = `${sender} - ${timestamp} - ID: ${postId}`;
+
+        const messageTitle = document.createElement("div");
+        messageTitle.style.fontWeight = "bold";
+        messageTitle.textContent = isUserMessage ? "New message" : post.title;
+
+        const messageContent = document.createElement("div");
+        messageContent.textContent = post.body;
+
+        messageDiv.appendChild(messageInfo);
+        messageDiv.appendChild(messageTitle);
+        messageDiv.appendChild(messageContent);
+
+        chatContainer.appendChild(messageDiv);
+
+        // Scroll to the bottom
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Mark this post as displayed
+        if (!isUserMessage && post.id) {
+          displayedMessageIds.add(post.id);
+        }
+      }
+
+      // Function to send a message
+      function sendMessage(content) {
+        // Create a post object for the user message
+        const userPost = {
+          body: content,
+          title: "New message",
+        };
+
+        // Add the user message to the chat
+        addMessageToChat(userPost, true);
+
+        // In a real app, we would POST this message to the server
+        fetch("https://jsonplaceholder.typicode.com/posts", {
+          method: "POST",
+          body: JSON.stringify({
+            title: "New message",
+            body: content,
+            userId: 1,
+          }),
+          headers: {
+            "Content-type": "application/json; charset=UTF-8",
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("Message sent successfully:", data);
+            updateStatus("Message sent successfully");
+          })
+          .catch((error) => {
+            console.error("Error sending message:", error);
+            updateStatus("Error sending message");
+          });
+      }
+
+      // Function to fetch a single message by ID
+      function fetchSingleMessage() {
+        if (!isPollingActive) return;
+
+        updateStatus(`Fetching message #${currentMessageId}...`);
+
+        fetch(`https://jsonplaceholder.typicode.com/posts/${currentMessageId}`)
+          .then((response) => {
+            if (!response.ok) {
+              if (response.status === 404) {
+                // If we've reached the end of available posts, start over
+                currentMessageId = 1;
+                throw new Error(
+                  "No more messages available, restarting from ID 1"
+                );
+              }
+              throw new Error(`Failed to fetch message #${currentMessageId}`);
+            }
+            return response.json();
+          })
+          .then((post) => {
+            // Add the message to the chat
+            addMessageToChat(post);
+            updateStatus(`Received message #${currentMessageId}`);
+
+            // Increment the message ID for next fetch
+            currentMessageId++;
+          })
+          .catch((error) => {
+            console.error("Error fetching message:", error);
+            updateStatus(`Error: ${error.message}`);
+          });
+      }
+
+      // Function to update status
+      function updateStatus(message) {
+        document.getElementById("connection-status").textContent = message;
+      }
+
+      // Handle form submission
+      document
+        .getElementById("message-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+
+          const messageInput = document.getElementById("message-input");
+          const content = messageInput.value.trim();
+
+          if (content) {
+            sendMessage(content);
+            messageInput.value = "";
+          }
+        });
+
+      // Start by showing a welcome message
+      setTimeout(() => {
+        const welcomeMessage = {
+          id: "welcome",
+          title: "Welcome to the Chat",
+          body: "This is a simulated chat using JSONPlaceholder API. New messages will appear every few seconds.",
+          userId: "System",
+        };
+        addMessageToChat(welcomeMessage);
+        updateStatus("Connected to chat server");
+
+        // Start polling for messages with setInterval
+        const pollingInterval = setInterval(() => {
+          if (isPollingActive) {
+            fetchSingleMessage();
+          }
+        }, 3000); // Fetch a new message every 3 seconds
+
+        // Add a cleanup function to stop polling when the page is closed
+        window.addEventListener("beforeunload", () => {
+          clearInterval(pollingInterval);
+          isPollingActive = false;
+        });
+      }, 1000);
+    </script>
+  </body>
+</html>

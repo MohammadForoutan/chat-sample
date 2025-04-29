@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Chat Forum</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      #chat-container {
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 10px;
+        height: 400px;
+        overflow-y: auto;
+        margin-bottom: 10px;
+      }
+      #message-form {
+        display: flex;
+        gap: 10px;
+      }
+      #message-input {
+        flex-grow: 1;
+        padding: 8px;
+      }
+      button {
+        padding: 8px 15px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      .message {
+        margin-bottom: 10px;
+        padding: 8px;
+        border-radius: 5px;
+      }
+      .chat-message {
+        background-color: #f1f1f1;
+      }
+      .system-message {
+        background-color: #e3f2fd;
+        font-style: italic;
+      }
+      .username {
+        font-weight: bold;
+        margin-right: 5px;
+      }
+      #username-container {
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Simple Chat Forum</h1>
+
+    <div id="username-container">
+      <label for="username-input">Your Username:</label>
+      <input
+        type="text"
+        id="username-input"
+        placeholder="Enter your username"
+      />
+      <button id="set-username-btn">Set Username</button>
+    </div>
+
+    <div id="chat-container"></div>
+
+    <form id="message-form">
+      <input
+        type="text"
+        id="message-input"
+        placeholder="Type your message..."
+        disabled
+      />
+      <button type="submit" id="send-btn" disabled>Send</button>
+    </form>
+
+    <script>
+      // DOM elements
+      const chatContainer = document.getElementById("chat-container");
+      const messageForm = document.getElementById("message-form");
+      const messageInput = document.getElementById("message-input");
+      const sendBtn = document.getElementById("send-btn");
+      const usernameInput = document.getElementById("username-input");
+      const setUsernameBtn = document.getElementById("set-username-btn");
+
+      let username = "";
+      let ws;
+
+      // Set username
+      setUsernameBtn.addEventListener("click", () => {
+        const newUsername = usernameInput.value.trim();
+        if (newUsername) {
+          username = newUsername;
+          usernameInput.disabled = true;
+          setUsernameBtn.disabled = true;
+          messageInput.disabled = false;
+          sendBtn.disabled = false;
+
+          // Connect to WebSocket server after setting username
+          connectWebSocket();
+        }
+      });
+
+      // Connect to WebSocket server
+      function connectWebSocket() {
+        // Use the current host for WebSocket connection
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.host}`;
+
+        ws = new WebSocket(wsUrl);
+
+        // WebSocket event handlers
+        ws.onopen = () => {
+          console.log("Connected to the server");
+          addMessage("Connected to the chat server", "system");
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "chat") {
+            addMessage(`${data.username}: ${data.message}`, "chat");
+          } else if (data.type === "system") {
+            addMessage(data.message, "system");
+          }
+        };
+
+        ws.onclose = () => {
+          addMessage("Disconnected from the server", "system");
+          // Try to reconnect after 5 seconds
+          setTimeout(connectWebSocket, 5000);
+        };
+
+        ws.onerror = (error) => {
+          console.error("WebSocket error:", error);
+          addMessage("Error connecting to the server", "system");
+        };
+      }
+
+      // Send message
+      messageForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        const message = messageInput.value.trim();
+        if (message && ws && ws.readyState === WebSocket.OPEN) {
+          // Send message to server
+          ws.send(
+            JSON.stringify({
+              username: username,
+              message: message,
+            })
+          );
+
+          // Clear input field
+          messageInput.value = "";
+        }
+      });
+
+      // Add message to chat container
+      function addMessage(message, type) {
+        const messageElement = document.createElement("div");
+        messageElement.classList.add("message");
+
+        if (type === "chat") {
+          messageElement.classList.add("chat-message");
+        } else if (type === "system") {
+          messageElement.classList.add("system-message");
+        }
+
+        messageElement.textContent = message;
+        chatContainer.appendChild(messageElement);
+
+        // Auto-scroll to the bottom
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    </script>
+  </body>
+</html>
